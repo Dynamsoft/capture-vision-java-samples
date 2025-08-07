@@ -147,7 +147,7 @@ public class DriverLicenseScanner {
                 }
 
                 if (imagePath.isEmpty()) {
-                    imagePath = "../../images/driver-license-sample.jpg";
+                    imagePath = "../../Images/driver-license-sample.jpg";
                 }
 
                 imagePath = imagePath.replaceAll("^\"|\"$", "");

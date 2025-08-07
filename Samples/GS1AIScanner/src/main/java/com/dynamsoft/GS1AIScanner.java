@@ -130,7 +130,7 @@ public class GS1AIScanner {
                 if (imagePath.equalsIgnoreCase("q")) {
                     return;
                 } else if (imagePath.isEmpty()) {
-                    imagePath = "../../images/gs1-ai-sample.png";
+                    imagePath = "../../Images/gs1-ai-sample.png";
                 }
 
                 imagePath = imagePath.replaceAll("^\"|\"$", "");

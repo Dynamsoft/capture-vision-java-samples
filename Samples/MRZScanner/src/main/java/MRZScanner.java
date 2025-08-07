@@ -162,7 +162,7 @@ public class MRZScanner {
                 }
 
                 if (imagePath.isEmpty()) {
-                    imagePath = "../../images/passport-sample.jpg";
+                    imagePath = "../../Images/passport-sample.jpg";
                 }
 
                 imagePath = imagePath.replaceAll("^\"|\"$", "");

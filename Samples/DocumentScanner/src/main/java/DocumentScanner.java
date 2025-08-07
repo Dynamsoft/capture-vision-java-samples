@@ -54,7 +54,7 @@ public class DocumentScanner {
                 }
 
                 if (imagePath.isEmpty()) {
-                    imagePath = "../../images/document-sample.jpg";
+                    imagePath = "../../Images/document-sample.jpg";
                 }
 
                 imagePath = imagePath.replaceAll("^\"|\"$", "");
