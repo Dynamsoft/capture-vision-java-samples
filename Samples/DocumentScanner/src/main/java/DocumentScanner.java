@@ -2,7 +2,7 @@ import com.dynamsoft.core.EnumErrorCode;
 import com.dynamsoft.cvr.CaptureVisionRouter;
 import com.dynamsoft.cvr.CapturedResult;
 import com.dynamsoft.cvr.EnumPresetTemplate;
-import com.dynamsoft.ddn.DeskewedImageResultItem;
+import com.dynamsoft.ddn.EnhancedImageResultItem;
 import com.dynamsoft.ddn.ProcessedDocumentResult;
 import com.dynamsoft.license.LicenseError;
 import com.dynamsoft.license.LicenseException;
@@ -76,14 +76,14 @@ public class DocumentScanner {
                         }
 
                         ProcessedDocumentResult processedDocumentResult = result.getProcessedDocumentResult();
-                        DeskewedImageResultItem[] items = processedDocumentResult != null ? processedDocumentResult.getDeskewedImageResultItems() : null;
+                        EnhancedImageResultItem[] items = processedDocumentResult != null ? processedDocumentResult.getEnhancedImageResultItems() : null;
                         if (items == null || items.length == 0) {
                             System.out.println("Page-" + (index + 1) + " No document found.");
                         } else {
-                            System.out.println("Page-" + (index + 1) + " Deskewed " + items.length + " documents.");
+                            System.out.println("Page-" + (index + 1) + " Enhanced " + items.length + " documents.");
                             for (int i = 0; i < items.length; i++) {
-                                DeskewedImageResultItem item = items[i];
-                                String outPath = "Page_" + (index + 1) + "deskewedResult_" + i + ".png";
+                                EnhancedImageResultItem item = items[i];
+                                String outPath = "Page_" + (index + 1) + "enhancedResult_" + i + ".png";
 
                                 ImageIO imageIO = new ImageIO();
                                 try {
