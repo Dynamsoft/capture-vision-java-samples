@@ -166,10 +166,14 @@ public class VINScanner {
                             System.out.println("Error: " + result.getErrorCode() + ", " + result.getErrorString());
                         }
 
+                        ImageTag tag = result.getOriginalImageTag();
+                        int pageNumber = tag instanceof FileImageTag ? ((FileImageTag)tag).getPageNumber() : index;
+
                         ParsedResult parsedResult = result.getParsedResult();
                         if (parsedResult == null || parsedResult.getItems().length == 0) {
-                            System.out.println("Page-" + (index + 1) + " No parsed results.");
+                            System.out.println("Page-" + (pageNumber + 1) + " No parsed results.");
                         } else {
+                            System.out.println("Page-" + (pageNumber + 1) + " Parsed.");
                             printResults(parsedResult);
                         }
                     }

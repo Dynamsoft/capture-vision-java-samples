@@ -1,4 +1,6 @@
 import com.dynamsoft.core.EnumErrorCode;
+import com.dynamsoft.core.basic_structures.FileImageTag;
+import com.dynamsoft.core.basic_structures.ImageTag;
 import com.dynamsoft.cvr.CaptureVisionRouter;
 import com.dynamsoft.cvr.CapturedResult;
 import com.dynamsoft.cvr.EnumPresetTemplate;
@@ -75,15 +77,18 @@ public class DocumentScanner {
                             System.out.println("Error: " + result.getErrorCode() + ", " + result.getErrorString());
                         }
 
+                        ImageTag tag = result.getOriginalImageTag();
+                        int pageNumber = tag instanceof FileImageTag ? ((FileImageTag)tag).getPageNumber() : index;
+
                         ProcessedDocumentResult processedDocumentResult = result.getProcessedDocumentResult();
                         EnhancedImageResultItem[] items = processedDocumentResult != null ? processedDocumentResult.getEnhancedImageResultItems() : null;
                         if (items == null || items.length == 0) {
-                            System.out.println("Page-" + (index + 1) + " No document found.");
+                            System.out.println("Page-" + (pageNumber + 1) + " No document found.");
                         } else {
-                            System.out.println("Page-" + (index + 1) + " Enhanced " + items.length + " documents.");
+                            System.out.println("Page-" + (pageNumber + 1) + " Enhanced " + items.length + " documents.");
                             for (int i = 0; i < items.length; i++) {
                                 EnhancedImageResultItem item = items[i];
-                                String outPath = "Page_" + (index + 1) + "enhancedResult_" + i + ".png";
+                                String outPath = "Page_" + (pageNumber + 1) + "enhancedResult_" + i + ".png";
 
                                 ImageIO imageIO = new ImageIO();
                                 try {

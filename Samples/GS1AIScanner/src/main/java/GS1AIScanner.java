@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Scanner;
 
 import com.dynamsoft.core.EnumErrorCode;
+import com.dynamsoft.core.basic_structures.FileImageTag;
+import com.dynamsoft.core.basic_structures.ImageTag;
 import com.dynamsoft.cvr.CaptureVisionError;
 import com.dynamsoft.cvr.CaptureVisionException;
 import com.dynamsoft.cvr.CaptureVisionRouter;
@@ -160,11 +162,15 @@ public class GS1AIScanner {
                             System.out.println("Error: " + result.getErrorCode() + ", " + result.getErrorString());
                         }
 
+                        ImageTag tag = result.getOriginalImageTag();
+                        int pageNumber = tag instanceof FileImageTag ? ((FileImageTag)tag).getPageNumber() : index;
+
                         DecodedBarcodesResult barcodesResult = result.getDecodedBarcodesResult();
                         ParsedResult parsedResult = result.getParsedResult();
                         if (barcodesResult == null || barcodesResult.getItems().length == 0) {
-                            System.out.println("Page-" + (index + 1) + " No parsed results.");
+                            System.out.println("Page-" + (pageNumber + 1) + " No parsed results.");
                         } else {
+                            System.out.println("Page-" + (pageNumber + 1) + " Parsed.");
                             printResults(barcodesResult, parsedResult);
                         }
                     }
