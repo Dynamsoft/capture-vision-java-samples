@@ -1,20 +1,112 @@
-import com.dynamsoft.core.EnumErrorCode;
-import com.dynamsoft.core.basic_structures.FileImageTag;
-import com.dynamsoft.core.basic_structures.ImageTag;
-import com.dynamsoft.cvr.CaptureVisionRouter;
-import com.dynamsoft.cvr.CapturedResult;
-import com.dynamsoft.dcp.EnumValidationStatus;
-import com.dynamsoft.dcp.ParsedResult;
-import com.dynamsoft.dcp.ParsedResultItem;
-import com.dynamsoft.license.LicenseError;
-import com.dynamsoft.license.LicenseException;
-import com.dynamsoft.license.LicenseManager;
-
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.dynamsoft.core.CoreException;
+import com.dynamsoft.core.EnumErrorCode;
+import com.dynamsoft.core.IntermediateResultExtraInfo;
+import com.dynamsoft.core.basic_structures.CapturedResultItem;
+import com.dynamsoft.core.basic_structures.FileImageTag;
+import com.dynamsoft.core.basic_structures.ImageData;
+import com.dynamsoft.core.basic_structures.OriginalImageResultItem;
+import com.dynamsoft.core.basic_structures.Quadrilateral;
+import com.dynamsoft.core.intermediate_results.ScaledColourImageUnit;
+import com.dynamsoft.cvr.CaptureVisionRouter;
+import com.dynamsoft.cvr.CapturedResult;
+import com.dynamsoft.cvr.IntermediateResultManager;
+import com.dynamsoft.cvr.IntermediateResultReceiver;
+import com.dynamsoft.dcp.EnumValidationStatus;
+import com.dynamsoft.dcp.ParsedResult;
+import com.dynamsoft.dcp.ParsedResultItem;
+import com.dynamsoft.ddn.EnhancedImageResultItem;
+import com.dynamsoft.ddn.ProcessedDocumentResult;
+import com.dynamsoft.ddn.intermediate_results.DeskewedImageElement;
+import com.dynamsoft.ddn.intermediate_results.DeskewedImageUnit;
+import com.dynamsoft.ddn.intermediate_results.DetectedQuadsUnit;
+import com.dynamsoft.dlr.intermediate_results.LocalizedTextLinesUnit;
+import com.dynamsoft.dlr.intermediate_results.RecognizedTextLinesUnit;
+import com.dynamsoft.id_utility.IdentityProcessor;
+import com.dynamsoft.license.LicenseError;
+import com.dynamsoft.license.LicenseException;
+import com.dynamsoft.license.LicenseManager;
+import com.dynamsoft.utility.ImageIO;
+import com.dynamsoft.utility.ImageProcessor;
+
+class PortraitZoneData {
+    public ScaledColourImageUnit scaledColourImageUnit;
+    public LocalizedTextLinesUnit localizedTextLinesUnit;
+    public RecognizedTextLinesUnit recognizedTextLinesUnit;
+    public DetectedQuadsUnit detectedQuadsUnit;
+    public DeskewedImageUnit deskewedImageUnit;
+}
+
+class MyIntermediateResultReceiver extends IntermediateResultReceiver {
+    private ConcurrentHashMap<String, PortraitZoneData> portraitZoneDataMap = new ConcurrentHashMap<String, PortraitZoneData>();
+
+    @Override
+    public void onScaledColourImageUnitReceived(ScaledColourImageUnit result, IntermediateResultExtraInfo info) {
+        String hashId = result.getOriginalImageHashId();
+        PortraitZoneData data = getData(hashId);
+        data.scaledColourImageUnit = result;
+    }
+
+    @Override
+    public void onLocalizedTextLinesReceived(LocalizedTextLinesUnit result, IntermediateResultExtraInfo info) {
+        if (info.isSectionLevelResult) {
+            String hashId = result.getOriginalImageHashId();
+            PortraitZoneData data = getData(hashId);
+            data.localizedTextLinesUnit = result;
+        }
+    }
+
+    @Override
+    public void onRecognizedTextLinesReceived(RecognizedTextLinesUnit result, IntermediateResultExtraInfo info) {
+        if (info.isSectionLevelResult) {
+            String hashId = result.getOriginalImageHashId();
+            PortraitZoneData data = getData(hashId);
+            data.recognizedTextLinesUnit = result;
+        }
+    }
+
+    @Override
+    public void onDetectedQuadsReceived(DetectedQuadsUnit result, IntermediateResultExtraInfo info) {
+        if (!info.isSectionLevelResult) {
+            String hashId = result.getOriginalImageHashId();
+            PortraitZoneData data = getData(hashId);
+            data.detectedQuadsUnit = result;
+        }
+    }
+
+    @Override
+    public void onDeskewedImageReceived(DeskewedImageUnit result, IntermediateResultExtraInfo info) {
+        if (info.isSectionLevelResult) {
+            String hashId = result.getOriginalImageHashId();
+            PortraitZoneData data = getData(hashId);
+            data.deskewedImageUnit = result;
+        }
+    }
+
+    public Quadrilateral getPortraitZone(String hashId) throws CoreException {
+        PortraitZoneData data = getData(hashId);
+        if (data != null) {
+            IdentityProcessor idProcessor = new IdentityProcessor();
+            return idProcessor.findPortraitZone(
+                    data.scaledColourImageUnit,
+                    data.localizedTextLinesUnit,
+                    data.recognizedTextLinesUnit,
+                    data.detectedQuadsUnit,
+                    data.deskewedImageUnit);
+        }
+        return null;
+    }
+
+    private PortraitZoneData getData(String hashId) {
+        return portraitZoneDataMap.computeIfAbsent(hashId, k -> new PortraitZoneData());
+    }
+}
 
 class MRZResult {
     String docId;
@@ -26,6 +118,7 @@ class MRZResult {
     String gender;
     String surname;
     String givenName;
+    boolean isPassport;
     List<String> rawText;
 
     public MRZResult(ParsedResultItem item) {
@@ -33,9 +126,10 @@ class MRZResult {
         if (docType.equals("MRTD_TD3_PASSPORT")) {
             if (item.getFieldValue("passportNumber") != null && item.getFieldValidationStatus("passportNumber") != EnumValidationStatus.VS_FAILED) {
                 docId = item.getFieldValue("passportNumber");
-            } else if (item.getFieldValue("documentNumber") != null && item.getFieldValidationStatus("documentNumber") != EnumValidationStatus.VS_FAILED) {
-                docId = item.getFieldValue("documentNumber");
             }
+            isPassport = true;
+        } else if (item.getFieldValue("documentNumber") != null && item.getFieldValidationStatus("documentNumber") != EnumValidationStatus.VS_FAILED) {
+            docId = item.getFieldValue("documentNumber");
         }
 
         rawText = new ArrayList<>();
@@ -105,22 +199,127 @@ class MRZResult {
 }
 
 public class MRZScanner {
-    private static void printResults(ParsedResult result) {
-        ImageTag tag = result.getOriginalImageTag();
-        if (tag instanceof FileImageTag) {
-            System.out.println("File: " + ((FileImageTag)tag).getFilePath());
-        }
 
-        if (result.getErrorCode() != EnumErrorCode.EC_OK && result.getErrorCode() != EnumErrorCode.EC_UNSUPPORTED_JSON_KEY_WARNING) {
-            System.out.println("Error: " + result.getErrorString());
-        } else {
-            ParsedResultItem[] items = result.getItems();
-            System.out.println("Parsed " + items.length + " MRZ Zones.");
-            for (ParsedResultItem item : items) {
-                MRZResult mrzResult = new MRZResult(item);
-                System.out.print(mrzResult);
+    private static ImageData getOriginalImage(CapturedResult result) {
+        CapturedResultItem[] items = result.getItems();
+        for (CapturedResultItem item : items) {
+            if (item instanceof OriginalImageResultItem) {
+                OriginalImageResultItem originalImageItem = (OriginalImageResultItem)item;
+                return originalImageItem.getImageData();
             }
         }
+        return null;
+    }
+
+    private static void saveProcessedDocumentResult(CapturedResult result, int pageNumber, String imagePathPrefix) {
+        System.out.println("Extract and save the normalized document image.");
+
+        ProcessedDocumentResult docResult = result.getProcessedDocumentResult();
+        EnhancedImageResultItem[] enhancedImageResultItems = docResult != null ? docResult.getEnhancedImageResultItems() : null;
+        if (enhancedImageResultItems == null || enhancedImageResultItems.length == 0) {
+            System.out.println("Page-" + pageNumber + " No processed document result found.");
+            return;
+        }
+
+        EnhancedImageResultItem enhancedImageResultItem = enhancedImageResultItems[0];
+        String outputPath = imagePathPrefix + pageNumber + "_document.png";
+        ImageIO imgIO = new ImageIO();
+        ImageData enhancedImage = enhancedImageResultItem.getImageData();
+        if (enhancedImage != null) {
+            try {
+                imgIO.saveToFile(enhancedImage, outputPath);
+                System.out.println("Document file: " + outputPath);
+            } catch (CoreException e) {
+                System.out.println("Save document file failed, error: " + e.getErrorCode() + ", " + e.getErrorString());
+            }
+        }
+    }
+
+    private static void savePortraitZone(MyIntermediateResultReceiver irReceiver, String hashId, ImageData originImageData, int pageNumber, String imagePathPrefix) {
+        System.out.println("Extract and save the portrait zone image.");
+
+        if (originImageData == null) {
+            System.out.println("Page-" + pageNumber + " Original image data not exists.");
+            return;
+        }
+
+        Quadrilateral quad;
+        try {
+            quad = irReceiver.getPortraitZone(hashId);
+            if (quad == null) {
+                System.out.println("Page-" + pageNumber + " No portrait zone found.");
+                return;
+            }
+        } catch (CoreException e) {
+            System.out.println("Finding portrait zone failed, error: " + e.getErrorCode() + ", " + e.getErrorString());
+            return;
+        }
+
+        ImageProcessor imgProcessor = new ImageProcessor();
+        ImageData croppedImage;
+        try {
+            croppedImage = imgProcessor.cropAndDeskewImage(originImageData, quad);
+        } catch (CoreException e) {
+            System.out.println("Crop image failed, error: " + e.getErrorCode() + ", " + e.getErrorString());
+            return;
+        }
+
+        String outputPath = imagePathPrefix + pageNumber + "_portrait.png";
+        ImageIO imgIO = new ImageIO();
+        try {
+            imgIO.saveToFile(croppedImage, outputPath);
+            System.out.println("Portrait file: " + outputPath);
+        } catch (CoreException e) {
+            System.out.println("Save portrait file failed, error: " + e.getErrorCode() + ", " + e.getErrorString());
+        }
+    }
+
+    private static void processResult(CapturedResult result, MyIntermediateResultReceiver irReceiver, int printIndex) {
+        if (result.getErrorCode() == EnumErrorCode.EC_UNSUPPORTED_JSON_KEY_WARNING) {
+            System.out.println("Warning: " + result.getErrorCode() + ", " + result.getErrorString());
+        } else if (result.getErrorCode() != EnumErrorCode.EC_OK) {
+            System.out.println("Error: " + result.getErrorCode() + ", " + result.getErrorString());
+        }
+
+        int pageNumber = printIndex + 1;
+        String imagePathPrefix = "";
+
+        FileImageTag tag = (FileImageTag)result.getOriginalImageTag();
+        if (tag != null) {
+            imagePathPrefix = Paths.get(tag.getFilePath()).getFileName().toString().replaceFirst("[.][^.]+$", "") + "_";
+
+            pageNumber = tag.getPageNumber() + 1;
+            System.out.println("File: " + tag.getFilePath());
+            System.out.println("Page Number: " + pageNumber);
+        }
+
+        ParsedResult parsedResult = result.getParsedResult();
+        ParsedResultItem[] parsedResultItems = parsedResult != null ? parsedResult.getItems() : null;
+        if (parsedResultItems == null || parsedResultItems.length == 0) {
+            System.out.println("No parsed results in page " + pageNumber + ".");
+            return;
+        }
+
+        String hashId = result.getOriginalImageHashId();
+        boolean isPassport = false;
+        if (parsedResult.getErrorCode() != EnumErrorCode.EC_OK && parsedResult.getErrorCode() != EnumErrorCode.EC_UNSUPPORTED_JSON_KEY_WARNING) {
+            System.out.println("Error: " + parsedResult.getErrorCode() + ", " + parsedResult.getErrorString());
+        } else {
+            for (ParsedResultItem parsedResultItem : parsedResultItems) {
+                MRZResult mrzResult = new MRZResult(parsedResultItem);
+                System.out.println(mrzResult);
+                if (!isPassport)
+                    isPassport = mrzResult.isPassport;
+            }
+        }
+
+        if (isPassport) {
+            ImageData originalImage = getOriginalImage(result);
+            saveProcessedDocumentResult(result, pageNumber, imagePathPrefix);
+            savePortraitZone(irReceiver, hashId, originalImage, pageNumber, imagePathPrefix);
+        }
+
+        System.out.println();
     }
 
     public static void main(String[] args) {
@@ -135,7 +334,7 @@ public class MRZScanner {
             // The string 'DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9' here is a free public trial license. Note that network connection is required for this license to work.
             try {
                 LicenseError licenseError = LicenseManager.initLicense("DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9");
-                if (licenseError.getErrorCode() != EnumErrorCode.EC_OK) {
+                if (licenseError.getErrorCode() != EnumErrorCode.EC_OK && licenseError.getErrorCode() != EnumErrorCode.EC_LICENSE_WARNING) {
                     errorCode = licenseError.getErrorCode();
                     errorMsg = licenseError.getErrorString();
                 }
@@ -152,6 +351,7 @@ public class MRZScanner {
             }
 
             CaptureVisionRouter cvRouter = new CaptureVisionRouter();
+            IntermediateResultManager irManager = cvRouter.getIntermediateResultManager();
             while (true) {
                 System.out.println(">> Input your image full path:");
                 System.out.println(">> 'Enter' for sample image or 'Q'/'q' to quit");
@@ -171,31 +371,21 @@ public class MRZScanner {
                     continue;
                 }
 
+                MyIntermediateResultReceiver irReceiver = new MyIntermediateResultReceiver();
+                irManager.addResultReceiver(irReceiver);
                 CapturedResult[] results = cvRouter.captureMultiPages(imagePath, "ReadPassportAndId");
+                irManager.removeResultReceiver(irReceiver);
+
                 if (results == null || results.length == 0) {
                     System.out.println("No results.");
                 } else {
                     for (int index = 0; index < results.length; index++) {
-                        CapturedResult result = results[index];
-                        if (result.getErrorCode() == EnumErrorCode.EC_UNSUPPORTED_JSON_KEY_WARNING) {
-                            System.out.println("Warning: " + result.getErrorCode() + ", " + result.getErrorString());
-                        } else if (result.getErrorCode() != EnumErrorCode.EC_OK) {
-                            System.out.println("Error: " + result.getErrorCode() + ", " + result.getErrorString());
-                        }
-
-                        ImageTag tag = result.getOriginalImageTag();
-                        int pageNumber = tag instanceof FileImageTag ? ((FileImageTag)tag).getPageNumber() : index;
-
-                        ParsedResult parsedResult = result.getParsedResult();
-                        if (parsedResult == null || parsedResult.getItems().length == 0) {
-                            System.out.println("Page-" + (pageNumber + 1) + " No parsed results.");
-                        } else {
-                            System.out.println("Page-" + (pageNumber + 1) + " Parsed.");
-                            printResults(parsedResult);
-                        }
+                        processResult(results[index], irReceiver, index);
                     }
                 }
             }
+        } catch (CoreException e) {
+            System.out.println("Error: " + e.getErrorCode() + ", " + e.getErrorString());
         } finally {
             scanner.close();
         }
