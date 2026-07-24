@@ -2,12 +2,28 @@
 
 This repository contains multiple samples that demonstrates how to use the [Dynamsoft Capture Vision](https://www.dynamsoft.com/capture-vision/docs/server/programming/java/) Java Edition.
 
-## Requirements
-- Operating systems:
-  - Windows Windows: Windows 8 and higher, or Windows Server 2012 and higher
-  - Linux x64 (Ubuntu 14.04.4+ LTS, Debian 8+, CentOS 7+, etc.)
-  - Linux arm 64bit
-  - macOS universal 10.15+
+## System Requirements
+
+### Supported Platforms
+
+**Windows**
+- Supported Versions: Windows 8 and higher, or Windows Server 2012 and higher
+- Architectures: x64, x86
+
+**Linux**
+- **x64**
+	- Supported Distributions: Ubuntu 16.04+ LTS, Debian 8+, CentOS 7+
+	- Dependencies: glibc 2.17
+- **ARM64**
+	- Supported Distributions: Ubuntu 18.04+ LTS, Debian 10+, CentOS/RHEL 8+
+	- Dependencies: glibc 2.27
+
+**macOS**
+- Supported Versions: macOS 12 (Monterey) and higher
+- Architectures: universal (x64, Apple Silicon)
+
+### Runtime Environment
+
 - JDK 1.8 and above
 
 ## Samples
